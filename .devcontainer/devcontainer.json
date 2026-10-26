@@ -1,0 +1,14 @@
+{
+  "name": "C# (.NET) + SQL Server",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "api-ecommerce-app",
+  "workspaceFolder": "/workspaces/api",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-mssql.mssql"
+      ]
+    }
+  }
+}
