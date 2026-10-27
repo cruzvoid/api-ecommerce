@@ -16,6 +16,7 @@ learning
 - .NET 9 (ASP.NET Core Web API, controllers)
 - Entity Framework Core 9 (SQL Server provider, code-first migrations)
 - AutoMapper 14 (entity ↔ DTO mapping)
+- OpenAPI (`Microsoft.AspNetCore.OpenApi`) + Swagger UI (`Swashbuckle.AspNetCore.SwaggerUI`, UI only)
 - SQL Server 2022 (Developer edition)
 - Dev Containers (Docker Compose)
 
@@ -57,7 +58,8 @@ dotnet run --launch-profile http  # http://localhost:5117 (forwarded to the host
 ```
 
 - `appsettings.json` has an empty `DefaultConnection`; the real value comes from the container env var, so `dotnet ef` / `dotnet run` must run inside the container.
-- There is no route at `/` and no Swagger UI; OpenAPI JSON is at `/openapi/v1.json`.
+- There is no route at `/`. In Development, Swagger UI is at `/swagger` and the OpenAPI JSON at `/openapi/v1.json`.
+- The spec comes from the built-in `AddOpenApi()`/`MapOpenApi()`; Swashbuckle is only used for the UI (`UseSwaggerUI` points at `/openapi/v1.json`), so don't add `AddSwaggerGen`.
 
 ## 🐳 Docker
 
@@ -109,9 +111,10 @@ docker compose -f .devcontainer/docker-compose.yml down
 ## 📌 Current status
 
 <!-- Update this when you pause work -->
-- Last task: Categories CRUD at `/api/categories` (GET all, GET `{id:int}`, POST, PATCH `{id:int}`, DELETE `{id:int}`), tested with curl
+- Done: Categories CRUD at `/api/categories` (GET all, GET `{id:int}`, POST, PATCH `{id:int}`, DELETE `{id:int}`), merged to `main` (PR #1)
+- Last task: Swagger UI at `/swagger` (Development only), verified working; not committed yet
 - Next steps:
-  - Commit the Categories CRUD work
+  - Commit the Swagger UI change
   - Decide on AutoMapper (see note above)
   - Minor cleanups in `CategoriesController`: duplicate `Name` assignment in Update, redundant `CategoryExists` check in Delete, typos in error messages, missing `204NoContent` response types
   - Consider `PUT` instead of `PATCH` for the full-replace update
