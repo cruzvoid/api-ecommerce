@@ -133,8 +133,6 @@ public class ProductRepository : IProductRepository
 		}
 
 		product.UpdateDate = DateTime.Now;
-		_db.Products.Update(product);
-
 		return Save();
 	}
 }
