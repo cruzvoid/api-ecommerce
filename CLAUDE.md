@@ -16,6 +16,7 @@ learning
 - .NET 9 (ASP.NET Core Web API, controllers)
 - Entity Framework Core 9 (SQL Server provider, code-first migrations)
 - AutoMapper 14 (entity ↔ DTO mapping)
+- OpenAPI (`Microsoft.AspNetCore.OpenApi`) + Swagger UI (`Swashbuckle.AspNetCore.SwaggerUI`, UI only)
 - SQL Server 2022 (Developer edition)
 - Dev Containers (Docker Compose)
 
@@ -54,10 +55,12 @@ Run these inside the dev container, from `src/ApiEcommerce.Api`:
 dotnet ef migrations add <Name>   # only generates migration files
 dotnet ef database update         # applies migrations to the DB
 dotnet run --launch-profile http  # http://localhost:5117 (forwarded to the host by VS Code)
+dotnet build --no-incremental     # full rebuild (`dotnet rebuild` doesn't exist)
 ```
 
 - `appsettings.json` has an empty `DefaultConnection`; the real value comes from the container env var, so `dotnet ef` / `dotnet run` must run inside the container.
-- There is no route at `/` and no Swagger UI; OpenAPI JSON is at `/openapi/v1.json`.
+- There is no route at `/`. In Development, Swagger UI is at `/swagger` and the OpenAPI JSON at `/openapi/v1.json`.
+- The spec comes from the built-in `AddOpenApi()`/`MapOpenApi()`; Swashbuckle is only used for the UI (`UseSwaggerUI` points at `/openapi/v1.json`), so don't add `AddSwaggerGen`.
 
 ## 🐳 Docker
 
@@ -92,6 +95,11 @@ docker compose -f .devcontainer/docker-compose.yml down
 - DB data persists in the named volume `api-ecommerce-db-data` (`docker volume rm api-ecommerce-db-data` to reset the DB).
 - The app container waits for the DB healthcheck (`sqlcmd SELECT 1`) before starting.
 
+### Troubleshooting
+
+- **"An error occurred setting up the container"**: run `docker start api-ecommerce-app` to see the real error. If it's `error mounting "/run/user/1000/wayland-N" ... not a directory` (stale Wayland socket after re-login), run `docker rm api-ecommerce-app && rmdir /run/user/1000/wayland-N`, then **Dev Containers: Rebuild Container**. The DB and its volume are unaffected.
+- **`dotnet ef` not found** (after recreating the container): `dotnet tool install --global dotnet-ef --version 9.0.21`. NuGet packages aren't lost; check them with `dotnet list package`.
+
 ## 🔧 Conventions
 
 - File names: kebab-case, except C# files, which use PascalCase matching the type name
@@ -109,9 +117,10 @@ docker compose -f .devcontainer/docker-compose.yml down
 ## 📌 Current status
 
 <!-- Update this when you pause work -->
-- Last task: Categories CRUD at `/api/categories` (GET all, GET `{id:int}`, POST, PATCH `{id:int}`, DELETE `{id:int}`), tested with curl
+- Done: Categories CRUD at `/api/categories` (GET all, GET `{id:int}`, POST, PATCH `{id:int}`, DELETE `{id:int}`), merged to `main` (PR #1)
+- Last task: Swagger UI at `/swagger` (Development only), verified working; not committed yet
 - Next steps:
-  - Commit the Categories CRUD work
+  - Commit the Swagger UI change
   - Decide on AutoMapper (see note above)
   - Minor cleanups in `CategoriesController`: duplicate `Name` assignment in Update, redundant `CategoryExists` check in Delete, typos in error messages, missing `204NoContent` response types
   - Consider `PUT` instead of `PATCH` for the full-replace update
