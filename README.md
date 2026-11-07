@@ -19,4 +19,4 @@ cp .env.example .env
 <!-- List the technologies used -->
 
 ---
-Author: cruzgenum
+Author: cruzvoid
