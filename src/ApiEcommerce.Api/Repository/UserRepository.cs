@@ -4,13 +4,23 @@ using ApiEcommerce.Api.Models;
 using ApiEcommerce.Api.Models.Dtos;
 using ApiEcommerce.Api.Repository.IRepository;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
 
 namespace ApiEcommerce.Api.Repository;
 
-public class UserRepository(ApplicationDbContext db, IConfiguration configuration) : IUserRepository
+public class UserRepository : IUserRepository
 {
-	public readonly ApplicationDbContext _db = db;
-	private string? secretKey = configuration.GetValue<string>("ApiSettings:SecretKey");
+	public readonly ApplicationDbContext _db;
+	private string? secretKey;
+
+	public UserRepository(ApplicationDbContext db, IConfiguration configuration)
+	{
+		_db = db;
+		secretKey = configuration.GetValue<string>("ApiSettings:SecretKey");
+	}
 
 	public User? GetUser(int id)
 	{
@@ -27,13 +37,110 @@ public class UserRepository(ApplicationDbContext db, IConfiguration configuratio
 		return !_db.Users.Any(u => u.Username.ToLower().Trim() == username.ToLower().Trim());
 	}
 
-	public Task<UserLoginResponseDto> Login(UserLoginDto userLoginDto)
+	public async Task<UserLoginResponseDto> Login(UserLoginDto userLoginDto)
 	{
-		throw new NotImplementedException();
+		/*
+			Check "Username" isn't empty.
+			If it is, it returns an empty token and an error message.
+		*/
+		if (string.IsNullOrEmpty(userLoginDto.Username))
+		{
+			return new UserLoginResponseDto()
+			{
+				Token = "",
+				User = null,
+				Message = "Username is required"
+			};
+		}
+
+		/*
+			Looks up the user in the DB with FirstOrDefaultAsync.
+			The comparison ignores case and extra spaces (ToLower().Trim()).
+			If not user matches, it returns an error.
+		*/
+		var user = await _db.Users.FirstOrDefaultAsync<User>(u => u.Username.ToLower().Trim() == userLoginDto.Username.ToLower().Trim());
+		if (user == null)
+		{
+			return new UserLoginResponseDto()
+			{
+				Token = "",
+				User = null,
+				Message = "Username no encontrado"
+			};
+		}
+
+		/*
+			Check the password with BCrypt.Verify.
+			The DB never stores the real password, only a hash of it.
+			BCrypt hashes the password the user typed and checks whether it matches the stored one.
+		*/
+		if (!BCrypt.Net.BCrypt.Verify(userLoginDto.Password, user.Password))
+		{
+			return new UserLoginResponseDto()
+			{
+				Token = "",
+				User = null,
+				Message = "Credentials are incorrect"
+			};
+		}
+
+		/*
+			JWT
+			Builds a JWT (JSON Web Token), which is the user's "pass" for later requests:
+			- Claims are the data stored inside the token: id, username, and role.
+			- Expires is set 2 hours from now.
+			- SigningCredentials signs the token with your SecretKey (from ApiSettings:SecretKey in config) using HMAC-SHA256.
+			  If anyone changes the token, the signature no longer matches and the server rejects it.
+		*/
+		var handlerToken = new JwtSecurityTokenHandler();
+		if (string.IsNullOrWhiteSpace(secretKey))
+		{
+			throw new InvalidOperationException("SecretKey won't configure");
+		}
+
+		var key = Encoding.UTF8.GetBytes(secretKey);
+		var tokenDescriptor = new SecurityTokenDescriptor
+		{
+			Subject = new ClaimsIdentity(new[]
+			{
+				new Claim("id",user.Id.ToString()),
+				new Claim("username",user.Username),
+				new Claim(ClaimTypes.Role,user.Role ?? string.Empty),
+			}
+			),
+			Expires = DateTime.UtcNow.AddHours(2),
+			SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+		};
+
+		// Returns the token as a string, some user info and a success message.
+		var token = handlerToken.CreateToken(tokenDescriptor);
+		return new UserLoginResponseDto()
+		{
+			Token = handlerToken.WriteToken(token),
+			User = new UserRegisterDto()
+			{
+				Username = user.Username,
+				Name = user.Name,
+				Role = user.Role,
+				Password = user.Password ?? ""
+			},
+			Message = "User login correctly"
+		};
 	}
 
-	public Task<User> Register(CreateUserDto createUserDto)
+	public async Task<User> Register(CreateUserDto createUserDto)
 	{
-		throw new NotImplementedException();
+		var encriptedPassword = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password);
+		var user = new User()
+		{
+			Username = createUserDto.Username ?? "No Username",
+			Name = createUserDto.Name,
+			Role = createUserDto.Role,
+			Password = encriptedPassword
+		};
+
+		_db.Users.Add(user);
+		await _db.SaveChangesAsync();
+		return user;
 	}
 }
