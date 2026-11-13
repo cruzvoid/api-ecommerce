@@ -37,51 +37,37 @@ public class UserRepository : IUserRepository
 		return !_db.Users.Any(u => u.Username.ToLower().Trim() == username.ToLower().Trim());
 	}
 
-	public async Task<UserLoginResponseDto> Login(UserLoginDto userLoginDto)
+	public async Task<UserLoginResponseDto?> Login(UserLoginDto userLoginDto)
 	{
 		/*
 			Check "Username" isn't empty.
-			If it is, it returns an empty token and an error message.
+			If it is, it returns null.
 		*/
 		if (string.IsNullOrEmpty(userLoginDto.Username))
 		{
-			return new UserLoginResponseDto()
-			{
-				Token = "",
-				User = null,
-				Message = "Username is required"
-			};
+			return null;
 		}
 
 		/*
 			Looks up the user in the DB with FirstOrDefaultAsync.
 			The comparison ignores case and extra spaces (ToLower().Trim()).
-			If not user matches, it returns an error.
+			If not user matches, it returns null.
 		*/
 		var user = await _db.Users.FirstOrDefaultAsync<User>(u => u.Username.ToLower().Trim() == userLoginDto.Username.ToLower().Trim());
 		if (user == null)
 		{
-			return new UserLoginResponseDto()
-			{
-				Token = "",
-				User = null,
-				Message = "Username no encontrado"
-			};
+			return null;
 		}
 
 		/*
 			Check the password with BCrypt.Verify.
 			The DB never stores the real password, only a hash of it.
 			BCrypt hashes the password the user typed and checks whether it matches the stored one.
+			it returns null.
 		*/
 		if (!BCrypt.Net.BCrypt.Verify(userLoginDto.Password, user.Password))
 		{
-			return new UserLoginResponseDto()
-			{
-				Token = "",
-				User = null,
-				Message = "Credentials are incorrect"
-			};
+			return null;
 		}
 
 		/*
@@ -117,12 +103,12 @@ public class UserRepository : IUserRepository
 		return new UserLoginResponseDto()
 		{
 			Token = handlerToken.WriteToken(token),
-			User = new UserRegisterDto()
+			User = new UserDto()
 			{
+				Id = user.Id,
 				Username = user.Username,
 				Name = user.Name,
 				Role = user.Role,
-				Password = user.Password ?? ""
 			},
 			Message = "User login correctly"
 		};
@@ -135,7 +121,7 @@ public class UserRepository : IUserRepository
 		{
 			Username = createUserDto.Username ?? "No Username",
 			Name = createUserDto.Name,
-			Role = createUserDto.Role,
+			Role = "User",
 			Password = encriptedPassword
 		};
 

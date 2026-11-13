@@ -74,12 +74,14 @@ namespace ApiEcommerce.Api.Controllers
 			}
 
 			var result = await _userRepository.Register(createUserDto);
+
 			if (result == null)
 			{
 				return StatusCode(StatusCodes.Status500InternalServerError, "Error al registrar el usuario");
 			}
 
-			return CreatedAtRoute("GetUser", new { id = result.Id }, result);
+			var userDto = _mapper.Map<UserDto>(result);
+			return CreatedAtRoute("GetUser", new { id = result.Id }, userDto);
 		}
 
 		[HttpPost("Login", Name = "LoginUser")]
