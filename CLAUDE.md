@@ -16,6 +16,7 @@ learning
 - .NET 9 (ASP.NET Core Web API, controllers)
 - Entity Framework Core 9 (SQL Server provider, code-first migrations)
 - AutoMapper 14 (entity ↔ DTO mapping)
+- BCrypt.Net-Next (password hashing) + `System.IdentityModel.Tokens.Jwt` (token creation)
 - OpenAPI (`Microsoft.AspNetCore.OpenApi`) + Swagger UI (`Swashbuckle.AspNetCore.SwaggerUI`, UI only)
 - SQL Server 2022 (Developer edition)
 - Dev Containers (Docker Compose)
@@ -30,11 +31,11 @@ api-ecommerce/
 │   └── .env.example
 ├── src/
 │   └── ApiEcommerce.Api/
-│       ├── Controllers/         # API controllers (CategoriesController)
+│       ├── Controllers/         # Categories, Products, Users
 │       ├── Data/                # ApplicationDbContext
 │       ├── Mapping/             # AutoMapper profiles
 │       ├── Migrations/          # EF Core migrations
-│       ├── Models/              # Entities (Category)
+│       ├── Models/              # Entities (Category, Product, User)
 │       │   └── Dtos/            # Request/response DTOs
 │       ├── Repository/          # Repository implementations
 │       │   └── IRepository/     # Repository interfaces
@@ -46,6 +47,15 @@ api-ecommerce/
 ├── .editorconfig
 └── .gitignore
 ```
+
+## 🏗️ Architecture
+
+- Request flow: Controller → repository interface (`Repository/IRepository`) → `ApplicationDbContext`. Controllers never touch the DbContext directly; they map entities to DTOs with `IMapper` and return DTOs.
+- Each new repository needs an `AddScoped<IXRepository, XRepository>()` line in `Program.cs`. AutoMapper profiles in `Mapping/` are picked up automatically via `AddAutoMapper(typeof(Program).Assembly)`.
+- `Product` has a required FK `CategoryId` → `Category`.
+- `UserRepository` owns the auth logic: BCrypt hashing on register, and on login it verifies the password and issues a JWT signed with `ApiSettings:SecretKey` (env var `ApiSettings__SecretKey`). Nothing validates tokens yet (see the paused JWT task below).
+- Schema changes go through EF migrations; after editing an entity, run `dotnet ef migrations add <Name>` and review the generated file before `database update`.
+- There is no test project. Verify changes manually via Swagger UI, `curl`, or `ApiEcommerce.Api.http`.
 
 ## ▶️ Running
 
@@ -74,7 +84,7 @@ The environment runs as a Dev Container defined in `.devcontainer/`:
 Setup:
 
 ```bash
-cp .devcontainer/.env.example .devcontainer/.env   # then set MSSQL_SA_PASSWORD
+cp .devcontainer/.env.example .devcontainer/.env   # then set MSSQL_SA_PASSWORD and JWT_SECRET_KEY
 ```
 
 Then in VS Code: **Dev Containers: Reopen in Container**. To manage it manually:
@@ -117,10 +127,9 @@ docker compose -f .devcontainer/docker-compose.yml down
 ## 📌 Current status
 
 <!-- Update this when you pause work -->
-- Done: Categories CRUD at `/api/categories` (GET all, GET `{id:int}`, POST, PATCH `{id:int}`, DELETE `{id:int}`), merged to `main` (PR #1)
-- Last task: Swagger UI at `/swagger` (Development only), verified working; not committed yet
+- Done and merged to `main`: Categories CRUD at `/api/categories` (PR #1), Swagger UI at `/swagger`, Products CRUD + search + `buyProduct` at `/api/products` (PR #2)
+- In progress on `feature/user-authentication-jwt`: Users at `/api/users` (GET all, GET `{id:int}`, POST register, POST `Login`)
 - Next steps:
-  - Commit the Swagger UI change
   - Decide on AutoMapper (see note above)
   - Minor cleanups in `CategoriesController`: duplicate `Name` assignment in Update, redundant `CategoryExists` check in Delete, typos in error messages, missing `204NoContent` response types
   - Consider `PUT` instead of `PATCH` for the full-replace update
