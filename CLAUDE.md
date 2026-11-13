@@ -124,3 +124,19 @@ docker compose -f .devcontainer/docker-compose.yml down
   - Decide on AutoMapper (see note above)
   - Minor cleanups in `CategoriesController`: duplicate `Name` assignment in Update, redundant `CategoryExists` check in Delete, typos in error messages, missing `204NoContent` response types
   - Consider `PUT` instead of `PATCH` for the full-replace update
+
+### ⏸️ Paused experiment: JWT validation (#5), branch `feature/user-authentication-jwt`
+
+Postponed until the user finishes the course module. Teach it step by step (the user writes the code).
+
+- Already done and committed: password hash hidden from responses, failed login returns 401, Register forces `Role = "User"` (`095b43c`), JWT key moved to the env var `ApiSettings__SecretKey`, fed by `JWT_SECRET_KEY` in `.devcontainer/.env` (`3d16a43`)
+- Problem: the API creates tokens but never validates them; every endpoint is public
+- **Part A: authentication**
+  1. `dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer --version 9.0.18` (stay on 9.0.x)
+  2. `Program.cs`: read `ApiSettings:SecretKey` (throw at startup if empty), then `AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(...)` with `ValidateIssuerSigningKey = true`, `IssuerSigningKey = new SymmetricSecurityKey(UTF8 bytes of the key)`, `ValidateIssuer = false`, `ValidateAudience = false`
+  3. `app.UseAuthentication()` right before `app.UseAuthorization()`
+- **Part B: authorization**
+  - `[Authorize]` on controllers, `[AllowAnonymous]` on Register/Login, `[Authorize(Roles = "Admin")]` on `GetUsers`
+  - Role checks are case-sensitive: the DB admin row has `role = "admin"`, but code uses `"User"`. Pick one casing (e.g. `Admin`/`User`) and update the row
+  - Test with `curl` or the `.http` file using an `Authorization: Bearer <token>` header (Swagger UI has no Bearer button without extra OpenAPI config)
+- Smaller leftovers from the review: mixed Spanish/English error messages, `_db` is `public` in `UserRepository`, `UserRegisterDto.ID` is a `string` (the DTO is now only referenced in `UserProfile`), unused usings, add `401` to `ProducesResponseType` on Login, add `System.IdentityModel.Tokens.Jwt` explicitly to the `.csproj`, pending migration (`UserName` nullable → `Username` required) and no unique index on `Username`
