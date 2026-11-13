@@ -5,9 +5,9 @@ Backend API RESTful using .NET9
 ## Installation
 
 ```bash
-git clone git@github.com:cruzgenum/api-ecommerce.git
+git clone git@github.com:cruzvoid/api-ecommerce.git
 cd api-ecommerce
-cp .env.example .env
+cp .devcontainer/.env.example .devcontainer/.env   # then set MSSQL_SA_PASSWORD and JWT_SECRET_KEY
 ```
 
 ## Usage

@@ -7,6 +7,7 @@ services:
     command: sleep infinity
     environment:
       ConnectionStrings__DefaultConnection: "Server=api-ecommerce-db,1433;Database=EcommerceDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      ApiSettings__SecretKey: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
     depends_on:
       api-ecommerce-db:
         condition: service_healthy
