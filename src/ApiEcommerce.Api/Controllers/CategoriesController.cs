@@ -5,11 +5,13 @@ using AutoMapper;
 using ApiEcommerce.Api.Models.Dtos;
 using ApiEcommerce.Api.Models;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ApiEcommerce.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+	[Authorize(Roles = "Admin")]
     public class CategoriesController : ControllerBase
 	{
 		private readonly ICategoryRepository _categoryRepository;
@@ -21,6 +23,7 @@ namespace ApiEcommerce.Api.Controllers
 			_mapper = mapper;
 		}
 
+		[AllowAnonymous]
 		[HttpGet]
 		[ProducesResponseType(StatusCodes.Status403Forbidden)]
 		[ProducesResponseType(StatusCodes.Status200OK)]
@@ -36,6 +39,7 @@ namespace ApiEcommerce.Api.Controllers
 			return Ok(categoriesDto);
 		}
 
+		[AllowAnonymous]
 		[HttpGet("{id:int}", Name = "GetCategory")]
 		[ProducesResponseType(StatusCodes.Status403Forbidden)]
 		[ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -86,7 +90,6 @@ namespace ApiEcommerce.Api.Controllers
 
 			return CreatedAtRoute("GetCategory", new { id = category.Id }, category);
 		}
-
 
 		[HttpPatch("{id:int}", Name = "UpdateCategory")]
 		[ProducesResponseType(StatusCodes.Status403Forbidden)]
