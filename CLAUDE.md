@@ -53,7 +53,7 @@ api-ecommerce/
 - Request flow: Controller → repository interface (`Repository/IRepository`) → `ApplicationDbContext`. Controllers never touch the DbContext directly; they map entities to DTOs with `IMapper` and return DTOs.
 - Each new repository needs an `AddScoped<IXRepository, XRepository>()` line in `Program.cs`. AutoMapper profiles in `Mapping/` are picked up automatically via `AddAutoMapper(typeof(Program).Assembly)`.
 - `Product` has a required FK `CategoryId` → `Category`.
-- `UserRepository` owns the auth logic: BCrypt hashing on register, and on login it verifies the password and issues a JWT signed with `ApiSettings:SecretKey` (env var `ApiSettings__SecretKey`). Nothing validates tokens yet (see the paused JWT task below).
+- `UserRepository` owns the auth logic: BCrypt hashing on register, and on login it verifies the password and issues a JWT signed with `ApiSettings:SecretKey` (env var `ApiSettings__SecretKey`). `Program.cs` validates tokens with JwtBearer, and controllers use `[Authorize(Roles = "Admin")]` + `[AllowAnonymous]` (see the JWT task below).
 - Schema changes go through EF migrations; after editing an entity, run `dotnet ef migrations add <Name>` and review the generated file before `database update`.
 - There is no test project. Verify changes manually via Swagger UI, `curl`, or `ApiEcommerce.Api.http`.
 
@@ -144,8 +144,10 @@ Postponed until the user finishes the course module. Teach it step by step (the 
   1. `dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer --version 9.0.18` (stay on 9.0.x)
   2. `Program.cs`: read `ApiSettings:SecretKey` (throw at startup if empty), then `AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(...)` with `ValidateIssuerSigningKey = true`, `IssuerSigningKey = new SymmetricSecurityKey(UTF8 bytes of the key)`, `ValidateIssuer = false`, `ValidateAudience = false`
   3. `app.UseAuthentication()` right before `app.UseAuthorization()`
+- Status (2026-11-16, uncommitted on `main`): Part A done (`ValidateAudience = false`, `UseAuthentication()` added). Part B done: every controller has `[Authorize(Roles = "Admin")]` at class level, with `[AllowAnonymous]` on Categories GETs, Products GETs/searches, and Users Register/Login. DB admin row updated to `Role = "Admin"`.
 - **Part B: authorization**
   - `[Authorize]` on controllers, `[AllowAnonymous]` on Register/Login, `[Authorize(Roles = "Admin")]` on `GetUsers`
-  - Role checks are case-sensitive: the DB admin row has `role = "admin"`, but code uses `"User"`. Pick one casing (e.g. `Admin`/`User`) and update the row
+  - Role checks are case-sensitive: casing is now `Admin`/`User` in code and DB
   - Test with `curl` or the `.http` file using an `Authorization: Bearer <token>` header (Swagger UI has no Bearer button without extra OpenAPI config)
+- **Next lesson: `BuyProduct`**: the reading and searching endpoints are open and the editing endpoints are Admin-only. One question for later is `BuyProduct`. Right now only admins can buy. In a store you'd probably want any logged-in user to buy. Teach it next, because it shows a new idea about how attributes combine (class-level and action-level `[Authorize]` stack as AND, so an action-level `[Authorize]` alone can't loosen the class's Admin requirement).
 - Smaller leftovers from the review: mixed Spanish/English error messages, `_db` is `public` in `UserRepository`, `UserRegisterDto.ID` is a `string` (the DTO is now only referenced in `UserProfile`), unused usings, add `401` to `ProducesResponseType` on Login, add `System.IdentityModel.Tokens.Jwt` explicitly to the `.csproj`, pending migration (`UserName` nullable → `Username` required) and no unique index on `Username`
