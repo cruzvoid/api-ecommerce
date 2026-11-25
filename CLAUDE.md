@@ -29,6 +29,8 @@ api-ecommerce/
 │   ├── devcontainer.json
 │   ├── docker-compose.yml
 │   └── .env.example
+├── scripts/
+│   └── seed-computer-shop.sql   # sample categories/products (run via sqlcmd, see header)
 ├── src/
 │   └── ApiEcommerce.Api/
 │       ├── Controllers/         # Categories, Products, Users
@@ -71,6 +73,19 @@ dotnet build --no-incremental     # full rebuild (`dotnet rebuild` doesn't exist
 - `appsettings.json` has an empty `DefaultConnection`; the real value comes from the container env var, so `dotnet ef` / `dotnet run` must run inside the container.
 - There is no route at `/`. In Development, Swagger UI is at `/swagger` and the OpenAPI JSON at `/openapi/v1.json`.
 - The spec comes from the built-in `AddOpenApi()`/`MapOpenApi()`; Swashbuckle is only used for the UI (`UseSwaggerUI` points at `/openapi/v1.json`), so don't add `AddSwaggerGen`.
+- JWT in Swagger UI: `AddOpenApi(options => options.AddDocumentTransformer(...))` in `Program.cs` adds a `Bearer` security scheme (`SecuritySchemeType.Http`, `bearer`, `JWT`) plus a document-level security requirement, so Swagger UI shows the **Authorize** button. Paste only the token (no `Bearer ` prefix). `EnablePersistAuthorization()` keeps it across refreshes. The requirement is global, so `[AllowAnonymous]` endpoints also show a lock (cosmetic only).
+
+### Fresh database setup
+
+After creating or resetting the DB (`docker volume rm api-ecommerce-db-data`), inside the container from `src/ApiEcommerce.Api`:
+
+1. `dotnet tool install --global dotnet-ef --version 9.0.21` (if `dotnet ef` is missing)
+2. `dotnet ef migrations list`: shows applied migrations and `(Pending)` ones
+3. `dotnet ef database update`: applies all pending migrations in order
+4. Optional sample data: run `scripts/seed-computer-shop.sql` (see its header)
+5. Register a user (`POST /api/users`) and set its `Role` to `Admin` in the DB
+
+- If `database update` fails with `PendingModelChangesWarning`, the entities changed without a migration: run `dotnet ef migrations add <Name>`, review it, then update again. Don't suppress the warning.
 
 ## 🐳 Docker
 
@@ -128,13 +143,14 @@ docker compose -f .devcontainer/docker-compose.yml down
 
 <!-- Update this when you pause work -->
 - Done and merged to `main`: Categories CRUD at `/api/categories` (PR #1), Swagger UI at `/swagger`, Products CRUD + search + `buyProduct` at `/api/products` (PR #2)
-- In progress on `feature/user-authentication-jwt`: Users at `/api/users` (GET all, GET `{id:int}`, POST register, POST `Login`)
+- Also merged: Users at `/api/users` (GET all, GET `{id:int}`, POST register, POST `Login`) (PR #3), global CORS policy (PR #4)
+- In progress on `feature/jwt-authorization`: JWT validation + role-based authorization (committed `d05de62`), required `Username` migration (`d5f1610`), Swagger UI Bearer support (uncommitted, 2026-11-25)
 - Next steps:
   - Decide on AutoMapper (see note above)
   - Minor cleanups in `CategoriesController`: duplicate `Name` assignment in Update, redundant `CategoryExists` check in Delete, typos in error messages, missing `204NoContent` response types
   - Consider `PUT` instead of `PATCH` for the full-replace update
 
-### ⏸️ Paused experiment: JWT validation (#5), branch `feature/user-authentication-jwt`
+### ⏸️ Paused experiment: JWT validation (#5), branch `feature/jwt-authorization`
 
 Postponed until the user finishes the course module. Teach it step by step (the user writes the code).
 
@@ -144,10 +160,11 @@ Postponed until the user finishes the course module. Teach it step by step (the 
   1. `dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer --version 9.0.18` (stay on 9.0.x)
   2. `Program.cs`: read `ApiSettings:SecretKey` (throw at startup if empty), then `AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(...)` with `ValidateIssuerSigningKey = true`, `IssuerSigningKey = new SymmetricSecurityKey(UTF8 bytes of the key)`, `ValidateIssuer = false`, `ValidateAudience = false`
   3. `app.UseAuthentication()` right before `app.UseAuthorization()`
-- Status (2026-11-16, uncommitted on `main`): Part A done (`ValidateAudience = false`, `UseAuthentication()` added). Part B done: every controller has `[Authorize(Roles = "Admin")]` at class level, with `[AllowAnonymous]` on Categories GETs, Products GETs/searches, and Users Register/Login. DB admin row updated to `Role = "Admin"`.
+- Status (2026-11-16, committed in `d05de62`): Part A done (`ValidateAudience = false`, `UseAuthentication()` added). Part B done: every controller has `[Authorize(Roles = "Admin")]` at class level, with `[AllowAnonymous]` on Categories GETs, Products GETs/searches, and Users Register/Login. DB admin row updated to `Role = "Admin"`.
 - **Part B: authorization**
   - `[Authorize]` on controllers, `[AllowAnonymous]` on Register/Login, `[Authorize(Roles = "Admin")]` on `GetUsers`
   - Role checks are case-sensitive: casing is now `Admin`/`User` in code and DB
-  - Test with `curl` or the `.http` file using an `Authorization: Bearer <token>` header (Swagger UI has no Bearer button without extra OpenAPI config)
+  - Test with `curl`, the `.http` file (`Authorization: Bearer <token>` header), or Swagger UI's **Authorize** button (added 2026-11-25, see Running)
+- **Optional exercise: per-operation lock in Swagger**: replace the global security requirement with `options.AddOperationTransformer(...)` that adds it only to endpoints whose metadata has `[Authorize]` and not `[AllowAnonymous]`
 - **Next lesson: `BuyProduct`**: the reading and searching endpoints are open and the editing endpoints are Admin-only. One question for later is `BuyProduct`. Right now only admins can buy. In a store you'd probably want any logged-in user to buy. Teach it next, because it shows a new idea about how attributes combine (class-level and action-level `[Authorize]` stack as AND, so an action-level `[Authorize]` alone can't loosen the class's Admin requirement).
-- Smaller leftovers from the review: mixed Spanish/English error messages, `_db` is `public` in `UserRepository`, `UserRegisterDto.ID` is a `string` (the DTO is now only referenced in `UserProfile`), unused usings, add `401` to `ProducesResponseType` on Login, add `System.IdentityModel.Tokens.Jwt` explicitly to the `.csproj`, pending migration (`UserName` nullable → `Username` required) and no unique index on `Username`
+- Smaller leftovers from the review: mixed Spanish/English error messages, `_db` is `public` in `UserRepository`, `UserRegisterDto.ID` is a `string` (the DTO is now only referenced in `UserProfile`), unused usings (e.g. `Microsoft.EntityFrameworkCore.Storage` and `Microsoft.Extensions.Options` in `Program.cs`), add `401` to `ProducesResponseType` on Login, add `System.IdentityModel.Tokens.Jwt` explicitly to the `.csproj`, no unique index on `Username`

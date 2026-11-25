@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,7 +52,32 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+	options.AddDocumentTransformer((document, context, cancellationToken) =>
+	{
+		// 1) Define the security scheme: "this API accepts a JWT in the Authorization header"
+		document.Components ??= new OpenApiComponents();
+		document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+		{
+			Type = SecuritySchemeType.Http, // the standard HTTP Authorization header
+			Scheme = "bearer",              // Swagger UI adds "Bearer " before the token for you
+			BearerFormat = "JWT",
+			Description = "Paste the token you get from POST /api/users/Login"
+		};
+
+		// 2) Apply that scheme to every operation (this is what makes Swagger UI send the header)
+		document.SecurityRequirements.Add(new OpenApiSecurityRequirement
+		{
+			[new OpenApiSecurityScheme
+			{
+				Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+			}] = Array.Empty<string>()
+		});
+
+		return Task.CompletedTask;
+	});
+});
 
 // CORS
 builder.Services.AddCors(options =>
@@ -70,7 +96,11 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
 	app.MapOpenApi();
-	app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "ApiEcommerce v1"));
+	app.UseSwaggerUI(options =>
+	{
+		options.SwaggerEndpoint("/openapi/v1.json", "ApiEcommerce v1");
+		options.EnablePersistAuthorization();
+	});
 }
 
 app.UseHttpsRedirection();
