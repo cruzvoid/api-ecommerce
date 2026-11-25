@@ -12,6 +12,7 @@ publish/
 coverage*.json
 coverage*.xml
 *.coverage
+/scripts
 
 # Visual Studio / Rider
 .vs/
